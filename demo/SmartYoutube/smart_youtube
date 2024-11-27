@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+
+from langchain_community.tools import YouTubeSearchTool
+from langchain_openai.chat_models import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+from alive_progress import alive_bar
+import re
+import webbrowser
+from helper_tool import YoutubeSearchHelper
+
+
+def print_stream(stream):
+    for s in stream:
+        # message = s["messages"][-1]
+        # if isinstance(message, tuple):
+        #     print(message)
+        # else:
+        #     message.pretty_print()
+        conv = s
+    return conv
+
+
+header = r"""
+
+         ____ _  _ ____ ____ ___    _   _ ____ _  _ ___ _  _ ___  ____ 
+         [__  |\/| |__| |__/  |      \_/  |  | |  |  |  |  | |__] |___ 
+         ___] |  | |  | |  \  |       |   |__| |__|  |  |__| |__] |___ 
+         
+"""
+
+
+def main():
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    agent = create_react_agent(llm, [YoutubeSearchHelper(), YouTubeSearchTool()], state_modifier="You are a helpful video search assistant, you should find videos related to user's query using tools")
+    youtube_url_pattern = re.compile(r'https?://www\.youtube\.com/watch\?v=[\w-]+&?[\w=%]*')
+
+
+
+    print(header)
+    print("Search your interests on YouTube in a smart way.\n\n")
+    print("="*80)
+    print("Type 'exit' to quit the application.")
+
+    while True:
+        query = input("Enter search query: ").strip()
+        if query.lower() == "exit":
+            print("Thanks for using Smart Youtube. Bye!")
+            break
+
+        try:
+            with alive_bar(1, bar="bubbles", spinner="dots", title="Searching for videos") as bar:
+                response = print_stream(agent.stream({"messages": [("user", query)]}, stream_mode="values"))
+
+                youtube_links = youtube_url_pattern.findall(response["messages"][-1].content)
+                if youtube_links:
+                    for match in youtube_links:
+                        # Extract full link from the match
+                        full_link = f"https://{match[0]}" if not match.startswith("http") else match
+                        print(f"Opening: {full_link}")
+                        webbrowser.open(full_link)
+                else:
+                    print(response["messages"][-1].content)
+                    print("No valid YouTube links found.")
+
+                bar()
+        except Exception as e:
+            print("Exception occurred during working: " + str(e))
+
+if __name__ == "__main__":
+    main()
